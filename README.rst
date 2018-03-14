@@ -19,7 +19,7 @@ Sample
   with constdb.read('db_name') as db:
       assert db.get(-2) == b'7564'
       assert db.get(-1) == b'66'
-      assert db.get(3) == b'23'``
+      assert db.get(3) == b'23'
 
 Documenation
 ===============
