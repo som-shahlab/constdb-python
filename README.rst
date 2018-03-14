@@ -26,13 +26,15 @@ Documenation
 
 ConstDB contains only two functions: ``create`` and ``read``.
 
-``create(filename)`` allows you to create a new ConstDB database.
+``create(filename)`` allows you to create a new ConstDB database. 
 It takes a filename and returns a ConstDBWriter. A ConstDBWriter has two methods: 
+
 - ``add(key, value)``: Adds a key-value pair to the database. The key must be a 64 bit integer. The value must be a byte string.
 - ``close()``: Finalize and close the database.
   
 ``read(filename)`` allows you to read an existing ConstDB database.
 It takes a filename and returns a ConstDBReader. A ConstDBReader has two methods: 
+
 - ``get(key)``: Get a value from the database. The key must be a 64 bit integer. Returns the value if the key is in the database. Returns None if the key is not found.
 - ``close()``: Finalize and close the database.
   
