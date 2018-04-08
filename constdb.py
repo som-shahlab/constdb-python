@@ -8,11 +8,10 @@ def read(name):
     return Reader(name)
 
 table_offset_format = '<q'
-table_entry_format = '<iqq'
+table_entry_format = '<iqqq'
 
 INT_KEY_TYPE = 0
 STR_KEY_TYPE = 1
-BYTES_KEY_TYPE = 2
 
 class Writer:
     def __init__(self, name):
@@ -28,18 +27,18 @@ class Writer:
             raise ValueError('You cannot store duplicate keys')
 
         self.file.write(value)
+        self.offsets[key] = (self.current_offset, self.current_offset + len(value))
         self.current_offset += len(value)
-        self.offsets[key] = self.current_offset
 
     def close(self):
         location_of_offsets = self.current_offset
 
-        for key, offset in self.offsets.items():
+        for key, (start, end) in self.offsets.items():
             if type(key) is int:
-                self.file.write(struct.pack(table_entry_format, INT_KEY_TYPE, offset, key))
+                self.file.write(struct.pack(table_entry_format, INT_KEY_TYPE, start, end, key))
             elif type(key) is str:
                 encoded_key = key.encode('utf-8')
-                self.file.write(struct.pack(table_entry_format, STR_KEY_TYPE, offset, len(encoded_key)))
+                self.file.write(struct.pack(table_entry_format, STR_KEY_TYPE, start, end, len(encoded_key)))
                 self.file.write(encoded_key)
 
         self.file.write(struct.pack(table_offset_format, location_of_offsets))
@@ -60,16 +59,15 @@ class Reader:
         size_of_table_offset = struct.calcsize(table_offset_format)
         size_of_table_entry = struct.calcsize(table_entry_format)
 
-        table_offset, = struct.unpack(table_offset_format, self.map[-size_of_table_offset:])
+        location_of_offset = len(self.map) - size_of_table_offset
 
-        num_entries = (len(self.map) - size_of_table_offset - table_offset) // size_of_table_entry
+        table_offset, = struct.unpack(table_offset_format, self.map[location_of_offset:])
 
         self.offsets = {}
 
         current_location = table_offset
-        last_offset = 0
-        for i in range(num_entries):
-            key_type, offset, key_val = struct.unpack(table_entry_format, self.map[current_location:current_location+size_of_table_entry])
+        while current_location < location_of_offset:
+            key_type, begin, end, key_val = struct.unpack(table_entry_format, self.map[current_location:current_location+size_of_table_entry])
             current_location += size_of_table_entry
 
             if key_type == INT_KEY_TYPE:
@@ -78,8 +76,7 @@ class Reader:
                 key = self.map[current_location:current_location+key_val].decode('utf-8')
                 current_location += key_val
 
-            self.offsets[key] = (last_offset, offset)
-            last_offset = offset
+            self.offsets[key] = (begin, end)
 
     def get(self, key):
         if key not in self.offsets:
