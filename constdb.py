@@ -78,6 +78,11 @@ class Reader:
 
             self.offsets[key] = (begin, end)
 
+        all_items = list(self.offsets.items())
+        all_items.sort(key=lambda a:a[1][0])
+
+        self.computed_keys = [a[0] for a in all_items]
+
     def get(self, key):
         if key not in self.offsets:
             return None
@@ -85,6 +90,9 @@ class Reader:
             begin, end =  self.offsets[key]
 
             return self.map[begin:end]
+
+    def keys(self):
+        return self.computed_keys
 
     def close(self):
         self.map.close()

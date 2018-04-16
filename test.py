@@ -18,3 +18,5 @@ def test_main():
             assert db.get(3) == b'23'
             assert db.get('Hello world') ==  b'67'
             assert db.get(6) == b'26'
+
+            assert db.keys() == [-2, 3, -1, 'Hello world', 6]
