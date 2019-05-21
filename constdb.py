@@ -12,16 +12,13 @@ def read(name, keys_to_read=None, mmap=True):
         return FseekReader(name, keys_to_read=keys_to_read)
 
 table_offset_format = '<q'
-table_entry_format = '<iqqq'
-
-INT_KEY_TYPE = 0
-STR_KEY_TYPE = 1
+table_entry_format = '<ii'
 
 class Writer:
     def __init__(self, name):
         self.file = open(name, 'wb')
         self.current_offset = 0
-        self.offsets = {}
+        self.offsets = []
 
     def add(self, key, value):
         if type(key) is not int and type(key) is not str:
@@ -31,18 +28,18 @@ class Writer:
             raise ValueError('You cannot store duplicate keys')
 
         self.file.write(value)
-        self.offsets[key] = (self.current_offset, self.current_offset + len(value))
+        self.offsets.append((key, len(value)))
         self.current_offset += len(value)
 
     def close(self):
         location_of_offsets = self.current_offset
 
-        for key, (start, end) in self.offsets.items():
+        for key, size in self.offsets:
             if type(key) is int:
-                self.file.write(struct.pack(table_entry_format, INT_KEY_TYPE, start, end, key))
+                self.file.write(struct.pack(table_entry_format, size, key))
             elif type(key) is str:
                 encoded_key = key.encode('utf-8')
-                self.file.write(struct.pack(table_entry_format, STR_KEY_TYPE, start, end, len(encoded_key)))
+                self.file.write(struct.pack(table_entry_format, -size, len(key)))
                 self.file.write(encoded_key)
 
         self.file.write(struct.pack(table_offset_format, location_of_offsets))
@@ -72,21 +69,24 @@ class FseekReader:
 
         self.file.seek(table_offset)
 
+        data_location = 0
         current_location = table_offset
         while current_location < location_of_offset:
-            key_type, begin, end, key_val = struct.unpack(table_entry_format, self.file.read(size_of_table_entry))
+            size, key_val = struct.unpack(table_entry_format, self.file.read(size_of_table_entry))
             current_location += size_of_table_entry
 
-            if key_type == INT_KEY_TYPE:
+            if size >= 0:
+                size = size
                 key = key_val
-            elif key_type == STR_KEY_TYPE:
+            else:
+                size = -size
                 key = self.file.read(key_val).decode('utf-8')
                 current_location += key_val
 
-            if keys_to_read is not None and key not in keys_to_read:
-                continue
+            if keys_to_read is None or key in keys_to_read:
+                self.offsets[key] = (data_location, data_location + size)
 
-            self.offsets[key] = (begin, end)
+            data_location += size
 
         all_items = list(self.offsets.items())
         all_items.sort(key=lambda a:a[1][0])
@@ -129,21 +129,24 @@ class MmapReader:
 
         self.offsets = {}
 
+        data_location = 0
         current_location = table_offset
         while current_location < location_of_offset:
-            key_type, begin, end, key_val = struct.unpack(table_entry_format, self.map[current_location:current_location+size_of_table_entry])
+            size, key_val = struct.unpack(table_entry_format, self.map[current_location:current_location+size_of_table_entry])
             current_location += size_of_table_entry
-
-            if key_type == INT_KEY_TYPE:
+            
+            if size >= 0:
+                size = size
                 key = key_val
-            elif key_type == STR_KEY_TYPE:
+            else:
+                size = -size
                 key = self.map[current_location:current_location+key_val].decode('utf-8')
                 current_location += key_val
 
-            if keys_to_read is not None and key not in keys_to_read:
-                continue
+            if keys_to_read is None or key in keys_to_read:
+                self.offsets[key] = (data_location, data_location + size)
 
-            self.offsets[key] = (begin, end)
+            data_location += size
 
         all_items = list(self.offsets.items())
         all_items.sort(key=lambda a:a[1][0])
