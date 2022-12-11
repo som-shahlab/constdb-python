@@ -21,11 +21,14 @@ class Writer:
         self.offsets = []
 
     def add(self, key, value):
-        if type(key) is not int and type(key) is not str:
-            raise ValueError('The key must be an integer or string')
+        if not isinstance(key, (int, str)):
+            raise ValueError("Key must be integer or string")
 
         if key in self.offsets:
             raise ValueError('You cannot store duplicate keys')
+
+        if not isinstance(value, bytes):
+            raise ValueError("Values must be bytes")
 
         self.file.write(value)
         self.offsets.append((key, len(value)))
