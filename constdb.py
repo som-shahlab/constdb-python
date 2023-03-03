@@ -14,11 +14,16 @@ def read(name, keys_to_read=None, mmap=True):
 table_offset_format = '<q'
 table_entry_format = '<ii'
 
+OFFSET_CHUNK = 1024
+
 class Writer:
     def __init__(self, name):
         self.file = open(name, 'wb')
         self.current_offset = 0
-        self.offsets = []
+        self.offsets = [None] * 1024
+        self.chunks = []
+        self.index = 0
+
 
     def add(self, key, value):
         if not isinstance(key, (int, str)):
@@ -31,19 +36,26 @@ class Writer:
             raise ValueError("Values must be bytes")
 
         self.file.write(value)
-        self.offsets.append((key, len(value)))
+        self.offsets[self.index] = (key, len(value))
+        self.index += 1
+        if self.index == OFFSET_CHUNK:
+            self.chunks.append(list(self.offsets))
+            self.index = 0
+
         self.current_offset += len(value)
 
     def close(self):
         location_of_offsets = self.current_offset
-
-        for key, size in self.offsets:
-            if type(key) is int:
-                self.file.write(struct.pack(table_entry_format, size, key))
-            elif type(key) is str:
-                encoded_key = key.encode('utf-8')
-                self.file.write(struct.pack(table_entry_format, -size, len(key)))
-                self.file.write(encoded_key)
+    
+        self.chunks.append(self.offsets[:self.index])
+        for chunk in self.chunks:
+            for key, size in chunk:
+                if type(key) is int:
+                    self.file.write(struct.pack(table_entry_format, size, key))
+                elif type(key) is str:
+                    encoded_key = key.encode('utf-8')
+                    self.file.write(struct.pack(table_entry_format, -size, len(key)))
+                    self.file.write(encoded_key)
 
         self.file.write(struct.pack(table_offset_format, location_of_offsets))
 
